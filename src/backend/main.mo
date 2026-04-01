@@ -72,27 +72,15 @@ actor {
   let experts = Map.empty<Principal, Expert>();
   let userProfiles = Map.empty<Principal, UserProfile>();
 
-  // Legacy stable variable kept for migration — do not remove
+  // Kept for stable variable compatibility — no longer used
   let paidSubscriptions = Set.empty<Principal>();
-
-  // Stores subscription expiry timestamp in nanoseconds
   let subscriptionExpiry = Map.empty<Principal, Int>();
-
   let THIRTY_DAYS_NS : Int = 30 * 24 * 60 * 60 * 1_000_000_000;
 
   var stripeConfig : ?Stripe.StripeConfiguration = null;
 
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
-
-  // Migrate legacy paidSubscriptions into subscriptionExpiry on upgrade
-  system func postupgrade() {
-    for (p in paidSubscriptions.values()) {
-      if (subscriptionExpiry.get(p) == null) {
-        subscriptionExpiry.add(p, Time.now() + THIRTY_DAYS_NS);
-      };
-    };
-  };
 
   // Transform for HTTP outcalls
   public query func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
@@ -121,45 +109,6 @@ actor {
       case (?c) { c };
     };
     await Stripe.createCheckoutSession(config, caller, items, successUrl, cancelUrl, transform);
-  };
-
-  // Subscription management
-  public query ({ caller }) func hasSubscription() : async Bool {
-    switch (subscriptionExpiry.get(caller)) {
-      case (null) { false };
-      case (?expiry) { Time.now() < expiry };
-    };
-  };
-
-  public query ({ caller }) func getSubscriptionExpiry() : async ?Int {
-    subscriptionExpiry.get(caller);
-  };
-
-  public shared ({ caller }) func verifyAndActivateSubscription(sessionId : Text) : async Bool {
-    let config = switch (stripeConfig) {
-      case (null) { Runtime.trap("Stripe not configured") };
-      case (?c) { c };
-    };
-    let status = await Stripe.getSessionStatus(config, sessionId, transform);
-    switch (status) {
-      case (#completed({ userPrincipal = ?principalText })) {
-        let p = Principal.fromText(principalText);
-        subscriptionExpiry.add(p, Time.now() + THIRTY_DAYS_NS);
-        true;
-      };
-      case (#completed({ userPrincipal = null })) {
-        subscriptionExpiry.add(caller, Time.now() + THIRTY_DAYS_NS);
-        true;
-      };
-      case (#failed(_)) { false };
-    };
-  };
-
-  public shared ({ caller }) func markSubscriptionPaid(user : Principal) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can manually mark subscriptions");
-    };
-    subscriptionExpiry.add(user, Time.now() + THIRTY_DAYS_NS);
   };
 
   // User profile functions
@@ -195,13 +144,6 @@ actor {
   ) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can create or update profiles");
-    };
-    let isActive = switch (subscriptionExpiry.get(caller)) {
-      case (null) { false };
-      case (?expiry) { Time.now() < expiry };
-    };
-    if (not isActive) {
-      Runtime.trap("Subscription required: Please pay the $2/month subscription fee to create a profile");
     };
     let profile : Expert = {
       name = name;
@@ -248,4 +190,9 @@ actor {
     };
     experts.remove(caller);
   };
+
+  // Suppress unused variable warnings
+  ignore paidSubscriptions.size();
+  ignore subscriptionExpiry.size();
+  ignore THIRTY_DAYS_NS;
 };
