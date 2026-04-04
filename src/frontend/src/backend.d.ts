@@ -64,4 +64,8 @@ export interface backendInterface {
     verifyAndActivateSubscription(sessionId: string): Promise<boolean>;
     markSubscriptionPaid(user: Principal): Promise<void>;
     getSubscriptionExpiry(): Promise<bigint | null>;
+    requestPhoneOTP(phone: string): Promise<string>;
+    verifyPhoneOTP(otp: string): Promise<boolean>;
+    isPhoneVerified(): Promise<boolean>;
+    getVerifiedPhone(): Promise<string | null>;
 }

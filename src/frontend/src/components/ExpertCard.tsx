@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "@tanstack/react-router";
-import { Clock, MapPin, Phone } from "lucide-react";
+import { CheckCircle, Clock, MapPin, Phone } from "lucide-react";
 import type { Expert } from "../backend";
 import {
   CATEGORY_COLORS,
@@ -39,9 +39,18 @@ export default function ExpertCard({ expert, index }: ExpertCardProps) {
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-display font-semibold text-base text-foreground truncate">
-              {expert.name}
-            </h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-display font-semibold text-base text-foreground truncate">
+                {expert.name}
+              </h3>
+              <span
+                className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"
+                data-ocid={`experts.verified.${index}`}
+              >
+                <CheckCircle className="w-3 h-3" />
+                Verified
+              </span>
+            </div>
             <Badge
               variant="outline"
               className={`mt-1 text-xs font-medium border ${colorClass} flex-shrink-0 inline-flex items-center gap-1`}

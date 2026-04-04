@@ -65,17 +65,26 @@ actor {
     #pestControl;
   };
 
+  type PendingOTP = {
+    otp : Text;
+    phone : Text;
+    expiry : Int;
+  };
+
   public type UserProfile = {
     name : Text;
   };
 
   let experts = Map.empty<Principal, Expert>();
   let userProfiles = Map.empty<Principal, UserProfile>();
+  let verifiedPhones = Map.empty<Principal, Text>();
+  let pendingOTPs = Map.empty<Principal, PendingOTP>();
 
   // Kept for stable variable compatibility — no longer used
   let paidSubscriptions = Set.empty<Principal>();
   let subscriptionExpiry = Map.empty<Principal, Int>();
   let THIRTY_DAYS_NS : Int = 30 * 24 * 60 * 60 * 1_000_000_000;
+  let TEN_MINUTES_NS : Int = 10 * 60 * 1_000_000_000;
 
   var stripeConfig : ?Stripe.StripeConfiguration = null;
 
@@ -89,6 +98,63 @@ actor {
 
   func filterByCategory(category : ServiceCategory) : [Expert] {
     experts.values().toArray().filter(func(expert) { ServiceCategory.compare(expert.serviceCategory, category) == #equal });
+  };
+
+  // Generates a simple 6-digit OTP from Time (deterministic for demo)
+  func generateOTP(caller : Principal, phone : Text) : Text {
+    let t = Int.abs(Time.now());
+    let p = caller.toText().size();
+    let ph = phone.size();
+    let raw = (t / 1_000_000 + p * 7 + ph * 13) % 1_000_000;
+    let s = raw.toText();
+    // Pad to 6 digits
+    let len = s.size();
+    if (len >= 6) { s }
+    else if (len == 5) { "0" # s }
+    else if (len == 4) { "00" # s }
+    else if (len == 3) { "000" # s }
+    else if (len == 2) { "0000" # s }
+    else { "00000" # s };
+  };
+
+  // Phone OTP functions
+  public shared ({ caller }) func requestPhoneOTP(phone : Text) : async Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Must be logged in");
+    };
+    let otp = generateOTP(caller, phone);
+    let expiry = Time.now() + TEN_MINUTES_NS;
+    pendingOTPs.add(caller, { otp = otp; phone = phone; expiry = expiry });
+    otp; // Return OTP for simulated display (no SMS service available)
+  };
+
+  public shared ({ caller }) func verifyPhoneOTP(otp : Text) : async Bool {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Must be logged in");
+    };
+    switch (pendingOTPs.get(caller)) {
+      case (null) { false };
+      case (?pending) {
+        if (Time.now() > pending.expiry) {
+          pendingOTPs.remove(caller);
+          false;
+        } else if (pending.otp == otp) {
+          verifiedPhones.add(caller, pending.phone);
+          pendingOTPs.remove(caller);
+          true;
+        } else {
+          false;
+        };
+      };
+    };
+  };
+
+  public shared query ({ caller }) func isPhoneVerified() : async Bool {
+    verifiedPhones.containsKey(caller);
+  };
+
+  public shared query ({ caller }) func getVerifiedPhone() : async ?Text {
+    verifiedPhones.get(caller);
   };
 
   // Stripe configuration

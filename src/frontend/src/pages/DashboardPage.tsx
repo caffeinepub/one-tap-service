@@ -28,18 +28,22 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AlertTriangle,
+  CheckCircle2,
   Clock,
   Loader2,
   LogIn,
   MapPin,
   Phone,
   Save,
+  ShieldCheck,
   Trash2,
   User,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ServiceCategory } from "../backend";
+import PhoneVerificationModal from "../components/PhoneVerificationModal";
 import StripeSetup from "../components/StripeSetup";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
@@ -47,6 +51,7 @@ import {
   useCreateOrUpdateProfile,
   useDeleteProfile,
   useGetOwnProfile,
+  useIsPhoneVerified,
 } from "../hooks/useQueries";
 import { ALL_CATEGORIES, CATEGORY_LABELS } from "../lib/categoryConfig";
 
@@ -79,9 +84,12 @@ export default function DashboardPage() {
     useCreateOrUpdateProfile();
   const { mutateAsync: deleteProfile, isPending: isDeleting } =
     useDeleteProfile();
+  const { data: isPhoneVerified, refetch: refetchVerification } =
+    useIsPhoneVerified();
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
+  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
 
   useEffect(() => {
     if (actor && isLoggedIn) {
@@ -207,6 +215,49 @@ export default function DashboardPage() {
             : "Fill in your details to appear in the expert listing."}
         </p>
       </div>
+
+      {/* Phone Verification Banner */}
+      {isPhoneVerified ? (
+        <div
+          className="flex items-center gap-3 p-4 mb-6 rounded-xl bg-green-50 border border-green-200"
+          data-ocid="dashboard.phone_verified.panel"
+        >
+          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-green-800 text-sm">
+              Phone Verified ✓
+            </p>
+            <p className="text-xs text-green-700">
+              Your phone number is verified. Customers can contact you directly.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="flex items-start gap-3 p-4 mb-6 rounded-xl bg-amber-50 border border-amber-200"
+          data-ocid="dashboard.phone_unverified.panel"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-amber-800 text-sm">
+              Verify your phone number
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5 mb-3">
+              Verify your phone number to publish your profile and appear in
+              listings.
+            </p>
+            <Button
+              size="sm"
+              onClick={() => setVerifyModalOpen(true)}
+              className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+              data-ocid="dashboard.verify_phone.button"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Verify Phone
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Profile Preview */}
       {profile && (
@@ -403,6 +454,19 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </form>
+
+      {/* Phone Verification Modal */}
+      {actor && (
+        <PhoneVerificationModal
+          open={verifyModalOpen}
+          onClose={() => setVerifyModalOpen(false)}
+          onVerified={() => {
+            setVerifyModalOpen(false);
+            refetchVerification();
+          }}
+          actor={actor}
+        />
+      )}
     </div>
   );
 }

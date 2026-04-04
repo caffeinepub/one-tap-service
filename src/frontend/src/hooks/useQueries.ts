@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ServiceCategory } from "../backend";
+import type { ServiceCategory, backendInterface } from "../backend";
 import { useActor } from "./useActor";
+
+// Extended interface for OTP methods not yet in the auto-generated backendInterface
+interface OTPCapableActor extends backendInterface {
+  isPhoneVerified(): Promise<boolean>;
+  getVerifiedPhone(): Promise<string | null>;
+}
 
 export function useGetAllExperts() {
   const { actor, isFetching } = useActor();
@@ -83,5 +89,37 @@ export function useDeleteProfile() {
       queryClient.invalidateQueries({ queryKey: ["ownProfile"] });
       queryClient.invalidateQueries({ queryKey: ["experts"] });
     },
+  });
+}
+
+export function useIsPhoneVerified() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["isPhoneVerified"],
+    queryFn: async () => {
+      if (!actor) return false;
+      try {
+        return await (actor as OTPCapableActor).isPhoneVerified();
+      } catch {
+        return false;
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGetVerifiedPhone() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["verifiedPhone"],
+    queryFn: async () => {
+      if (!actor) return null;
+      try {
+        return await (actor as OTPCapableActor).getVerifiedPhone();
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!actor && !isFetching,
   });
 }
